@@ -1,7 +1,8 @@
-VERSION := 2.02
+VERSION := 2.06
 CC      := gcc
-CFLAGS  := -Wall -fPIC -fPIE
-LDLAGS  := -pie 
+CFLAGS  := -Wall -fPIC -fPIE 
+#LDFLAGS := -pie -s
+LDFLAGS := -pie 
 DESTDIR :=
 PREFIX  := /usr
 BINDIR  := /bin
@@ -9,7 +10,7 @@ MANDIR  := /share/man
 APPNAME := epub2txt
 
 TARGET	:= epub2txt 
-SOURCES := $(shell find src/ -type f -name *.c)
+SOURCES := $(sort $(shell find src/ -type f -name *.c))
 OBJECTS := $(patsubst src/%,build/%,$(SOURCES:.c=.o))
 DEPS	:= $(OBJECTS:.o=.deps)
 

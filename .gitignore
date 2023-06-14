@@ -1,2 +1,4 @@
 build
 epub2txt
+*.o
+*.epub

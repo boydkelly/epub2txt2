@@ -11,8 +11,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <signal.h>
 #include <errno.h>
 #ifndef __APPLE__
 #include <malloc.h>
@@ -23,6 +21,7 @@
 #include "string.h"
 #include "sxmlc.h"
 #include "xhtml.h"
+#include "util.h"
 
 /*============================================================================
   epub2txt_unescape_html
@@ -89,14 +88,22 @@ static char *epub2txt_unescape_html (const char *s)
 static void epub2txt_format_meta (const Epub2TxtOptions *options, 
           const char *key, const char *text)
   {
-  char *ss = epub2txt_unescape_html (text);
-  char *s;
-  asprintf (&s, "%s: %s", key, ss);
-  char *error = NULL;
-  xhtml_utf8_to_stdout (s, options, &error);
-  if (error) free (error);
-  free (s);
-  free (ss);
+  // text ends up "null" here, if the meta tag had no content (which should
+  //   not happen, but we don't want to crash if it does). I suppress all
+  //   output in this case, but perhaps it would be better to print the
+  //   metadata key, and the value "null", or "empty"? I can't really predict
+  //   what a user would prefer to see.
+  if (text)
+    {
+    char *ss = epub2txt_unescape_html (text);
+    char *s;
+    asprintf (&s, "%s: %s", key, ss);
+    char *error = NULL;
+    xhtml_utf8_to_stdout (s, options, &error);
+    if (error) free (error);
+    free (s);
+    free (ss);
+    }
   }
 
 
@@ -134,10 +141,16 @@ static List *epub2txt_dump_metadata (const char *opf,
 	    XMLNode *r2 = metadata->children[i];
             const char *mdtag = r2->tag;
             const char *mdtext = r2->text;
+            // Don't try to print anything if the metadata text is null
+            if (!mdtext) continue;
             if (strstr (mdtag, "creator"))
               epub2txt_format_meta (options, "Creator", mdtext);
             else if (strstr (mdtag, "publisher"))
               epub2txt_format_meta (options, "Publisher", mdtext);
+            else if (strstr (mdtag, "contributor"))
+              epub2txt_format_meta (options, "Contributor", mdtext);
+            else if (strstr (mdtag, "identifier"))
+              epub2txt_format_meta (options, "Identifier", mdtext);
             else if (strstr (mdtag, "date"))
               {
               char *mdate = strdup (mdtext);
@@ -299,7 +312,8 @@ List *epub2txt_get_items (const char *opf, char **error)
 			char *val2 = r3->attributes[p].value;
 			if (strcmp (name2, "href") == 0)
 			  {
-			  list_append (ret, strdup (val2));
+                          char *decoded_val2 = decode_url (val2);
+			  list_append (ret, decoded_val2);
 			  }
 			}
 		      }
@@ -400,66 +414,52 @@ void epub2txt_do_file (const char *file, const Epub2TxtOptions *options,
     {
     log_debug ("File access OK");
 
-    //output_para = 0;
-    char tempdir[512];
-    char tempbase[256];
-    char cmd[1024];
+    char *tempbase, *tempdir;
 
-    if (getenv ("TMP"))
-      strcpy (tempbase, getenv("TMP"));
-    else
-      strcpy (tempbase, "/tmp");
+    if (!(tempbase = getenv("TMP")) && !(tempbase = getenv("TMPDIR")))
+      tempbase = "/tmp";
 
     log_debug ("tempbase is: %s", tempbase);
 
-    sprintf (tempdir, "%s/epub2txt%d", tempbase, getpid()); 
-
+    asprintf (&tempdir, "%s/epub2txt%d", tempbase, getpid()); 
     log_debug ("tempdir is: %s", tempdir);
 
-    // We should really check this but, honestly, anybody who creates
-    //  a non-writable tempdir has problems far worse than being unable
-    //  to run this utility
-    mkdir (tempdir, 0777); 
+    if (mkdir (tempdir, 0777) == -1)
+      {
+      log_error ("Can't create directory for extraction: \"%s\": %s", tempdir,
+        strerror (errno));
+      free(tempdir);
+      return;
+      }
 
     BOOL unzip_ok = TRUE;
 
     log_debug ("Running unzip command");
-    int pid = fork();
-    if (pid == 0)
-      {
-      execlp ("unzip", "unzip", "-o", "-qq", file, "-d", tempdir, NULL);
-      log_error ("Can't execute unzip: %s", strerror (errno));
-      kill (getppid(), SIGTERM);
-      exit (-1);
-      }
-    else
-      {
-      int status = 0;
-      waitpid (pid, &status, 0);
-      // We could set unzip_ok here, but I'm not sure that unzip really
-      //  returns a reliable status code
-      }
+    run_command ((const char *[]){"unzip", "-o", "-qq", file, "-d", tempdir,
+      NULL}, TRUE);
+    // We could set unzip_ok here, but I'm not sure that unzip really
+    //  returns a reliable status code
 
     if (unzip_ok)
       {
       log_debug ("Unzip finished");
       // On some systems, unzip results in a file with no read permissions
-      //   for the user -- reason unknown 
-      sprintf (cmd, "chmod -R 744 \"%s\"", tempdir);
-      log_debug ("Fix permissions: %s", cmd);
-      system (cmd);
+      //   for the user -- reason unknown
+      log_debug ("Fix permissions: %s", tempdir);
+      run_command((const char *[]){"chmod", "-R", "744", tempdir, NULL}, FALSE);
       log_debug ("Permissions fixed");
 
-
-      char opf[1024];
-      sprintf (opf, "%s/META-INF/container.xml", tempdir);
+      char *opf;
+      asprintf (&opf, "%s/META-INF/container.xml", tempdir);
       log_debug ("OPF path is: %s", opf);
       String *rootfile = epub2txt_get_root_file (opf, error);
       if (*error == NULL)
         {
         log_debug ("OPF rootfile is: %s", string_cstr(rootfile));
 
-        sprintf (opf, "%s/%s", tempdir, string_cstr (rootfile));
+        free (opf);
+        asprintf (&opf, "%s/%s", tempdir, string_cstr (rootfile));
+
         char *content_dir = strdup (opf);
         char *p = strrchr (content_dir, '/');
         *p = 0; 
@@ -488,24 +488,27 @@ void epub2txt_do_file (const char *file, const Epub2TxtOptions *options,
 	    for (i = 0; i < l; i++)
 	      {
 	      const char *item = (const char *)list_get (list, i);
-	      sprintf (opf, "%s/%s", content_dir, item);
+	      free (opf);
+	      asprintf (&opf, "%s/%s", content_dir, item);
 	      xhtml_file_to_stdout (opf, options, error);
 	      }
 	    list_destroy (list);
 	    }
           }
         free (content_dir);
+        free (opf);
         }
 
       if (rootfile) string_destroy (rootfile);
-      sprintf (cmd, "rm -rf \"%s\"", tempdir);
       log_debug ("Deleting temporary directory");
-      system (cmd); 
+      run_command ((const char *[]){"rm", "-rf", tempdir, NULL}, FALSE);
       }
     else
       {
       // unzip failed
       }
+
+    free (tempdir);
     }
   else
     {
