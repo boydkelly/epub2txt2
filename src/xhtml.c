@@ -17,7 +17,7 @@
 #endif
 #include "epub2txt.h" 
 #include "log.h"
-#include "string.h"
+#include "custom_string.h"
 #include "wstring.h"
 #include "wrap.h"
 #include "xhtml.h"

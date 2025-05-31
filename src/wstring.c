@@ -15,7 +15,7 @@
 #include <errno.h> 
 #include <string.h> 
 #include "wstring.h"
-#include "string.h"
+#include "custom_string.h"
 #include "convertutf.h"
 #include "log.h"
 
