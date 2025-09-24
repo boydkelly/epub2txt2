@@ -23,11 +23,12 @@ epub2txt is a simple command-line utility for extracting text from EPUB document
 %autosetup
 
 %build
-make
+%set_build_flags
+make CFLAGS="%{build_cflags}" LDFLAGS="%{build_ldflags}"
 
 %install
-rm -rf $RPM_BUILD_ROOT
-%make_install prefix=$RPM_BUILD_ROOT/usr
+rm -rf %{buildroot}
+%make_install PREFIX=%{_prefix}
 
 %post
 
