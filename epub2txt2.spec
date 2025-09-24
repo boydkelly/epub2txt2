@@ -36,5 +36,8 @@ rm -rf $RPM_BUILD_ROOT
 %_mandir/*
 
 %changelog
+* Wed Sep 24 2025 Boyd Kelly <bkelly@coastsystems.net> - 2.08
+- Initial version of epub2txt2 for Fedora 
+
 * Fri Apr 9 2021 Boyd Kelly <bkelly@coastsystems.net> - 2.01
 - Initial version of epub2txt2 for Fedora 
