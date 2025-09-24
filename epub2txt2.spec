@@ -1,9 +1,9 @@
 %global commit 95ddd43cdde907e7439cd7e85bf32837112770d7
 %global shortcommit %(c=%{commit}; echo ${c:0:7}) 
-%global gittag v2.01
+%global gittag v2.08
 
 Name:     epub2txt2
-Version:  2.01
+Version:  2.08
 Release:  1%{dist} 
 Summary:  Command-line utility for extracting text from EPUB documents
 License:  GPL3
