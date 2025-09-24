@@ -9,7 +9,7 @@ Summary:  Command-line utility for extracting text from EPUB documents
 License:  GPL3
 URL:      https://github.com/kevinboone/epub2txt2
 
-Source0:  https://github.com/boydkelly/epub2txt2/archive/%{gittag}/%{name}-%{version}.tar.gz
+Source0:  https://github.com/kevinboon/epub2txt2/archive/%{gittag}/%{name}-%{version}.tar.gz
 
 BuildRequires: git
 BuildRequires: gcc
